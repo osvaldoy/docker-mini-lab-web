@@ -9,37 +9,35 @@ on:
 
 jobs:
   build-and-test:
-    name: Build et test de l'image Docker
+    name: Build et test avec Docker Compose
     runs-on: ubuntu-latest
 
     steps:
       - name: Récupérer le code source
         uses: actions/checkout@v4
 
-      - name: Configurer Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Construire l'image Docker
-        uses: docker/build-push-action@v6
-        with:
-          context: ./app
-          file: ./app/Dockerfile
-          push: false
-          load: true
-          tags: docker-mini-lab:ci
-
-      - name: Démarrer le container
+      - name: Vérifier Docker et Docker Compose
         run: |
-          docker run -d --name mini-lab-test -p 5000:5000 docker-mini-lab:ci
+          docker --version
+          docker compose version
+
+      - name: Construire et démarrer les services
+        run: |
+          docker compose up -d --build
+
+      - name: Afficher les containers
+        run: |
+          docker ps -a
 
       - name: Attendre le démarrage de l'application
         run: |
-          for i in {1..15}; do
+          for i in {1..20}; do
             if curl -fsS http://localhost:5000/health > /dev/null; then
               echo "Application prête."
               exit 0
             fi
-            sleep 2
+            echo "Attente du démarrage de l'application..."
+            sleep 3
           done
           echo "L'application n'a pas démarré à temps."
           exit 1
@@ -48,12 +46,17 @@ jobs:
         run: |
           curl --fail http://localhost:5000/health
 
+      - name: Vérifier l'endpoint principal
+        run: |
+          curl --fail http://localhost:5000/
+
       - name: Afficher les logs en cas d'échec
         if: failure()
         run: |
-          docker logs mini-lab-test
+          docker compose logs
+          docker ps -a
 
       - name: Nettoyage
         if: always()
         run: |
-          docker rm -f mini-lab-test || true
+          docker compose down -v
